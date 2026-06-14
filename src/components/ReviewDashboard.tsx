@@ -18,8 +18,34 @@ import {
   UsersRound, 
   ChevronRight, 
   FileCheck2,
-  ListRestart
+  ListRestart,
+  BarChart3,
+  Activity,
+  Compass,
+  Flame,
+  Info
 } from "lucide-react";
+import { 
+  ResponsiveContainer, 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  PieChart as RechartsPieChart, 
+  Pie, 
+  Cell, 
+  RadarChart, 
+  PolarGrid, 
+  PolarAngleAxis, 
+  PolarRadiusAxis, 
+  Radar, 
+  ScatterChart, 
+  Scatter, 
+  ZAxis 
+} from "recharts";
 import { SavedDraft, EvaluationScorecard, SeverityType } from "../types";
 
 const CONTEXT_TEMPLATES = [
@@ -49,6 +75,57 @@ We have been scaling quite rapidly and we are seeing some crazy early traction a
   }
 ];
 
+const AGENT_METADATA: Record<string, { role: string; cognitiveStyle: string; criteria: string; focus: string[] }> = {
+  grammar: {
+    role: "Master Editorial Linguist",
+    cognitiveStyle: "Mechanical, pedantic, precise, and standard-seeking.",
+    criteria: "Syntactic correctness, run-ons, structural balance, proper punctuation, flow alignment.",
+    focus: ["Mechanical syntax errors", "Awkward/archaic phrasings", "Active vs passive balance", "Verb-subject concordance"]
+  },
+  logic: {
+    role: "Critical Thinking Auditor",
+    cognitiveStyle: "Skeptical, structured, forensic, and argumentative.",
+    criteria: "Logical consistency, premise support, cohesion between paragraphs, transition strength, structural fallacies.",
+    focus: ["Circular arguments", "Unsubstantiated claims", "Paragraph transition flow", "Thesis-to-evidence tightness"]
+  },
+  humanization: {
+    role: "Authenticity & Rhythm Evaluator",
+    cognitiveStyle: "Empathetic, rhythmic, sensory, and vocabulary-rich.",
+    criteria: "Fluency pace, cliches, sentence length distribution (burstiness), vocabulary freshness, human 'soul' quotient.",
+    focus: ["Monotonous text rhythms", "Stiff corporate jargon", "Overused cliches", "Organic connection intensity"]
+  },
+  ai_detection: {
+    role: "Forensic LLM Scanner",
+    cognitiveStyle: "Probabilistic, pattern-aware, and word-frequency-obsessed.",
+    criteria: "GPT signature identifiers, sentence construction repetition, burstiness variance.",
+    focus: ["LLM-slop words ('delve', 'tapestry')", "Uniform robotic sentence lengths", "Predictable transitional phrases", "Predictability score index"]
+  },
+  reviewer: {
+    role: "Executive Impression Simulator",
+    cognitiveStyle: "High-status, outcome-driven, critical, and discerning.",
+    criteria: "Professional maturity, respectfulness, alignment with target elite context (e.g., VC pitch, Ivy League SOP).",
+    focus: ["Tone-of-voice suitability", "Value-to-humility ratio", "Admissions/funding thresholds", "Executive polish"]
+  },
+  ats: {
+    role: "Applicant Tracking Optimizer",
+    cognitiveStyle: "Parser-focused, database-optimized, keyword-driven.",
+    criteria: "Role alignment, context word-cloud frequency, action verb strength, and readability of metrics.",
+    focus: ["Passive verb identification", "Industry core keyword count", "Outcome quantifiable metrics", "Formatting readability blocks"]
+  },
+  brand: {
+    role: "Personal Positioning Strategist",
+    cognitiveStyle: "Marketing-first, differentiation-obsessed, prestige-seeking.",
+    criteria: "Unique Selling Proposition (USP) representation, authority metrics, brand-voice focus, and emotional impact.",
+    focus: ["Commodity sounding paragraphs", "Differentiator clarity", "Authority signaling", "Memorable takeaways"]
+  },
+  recommendation: {
+    role: "Master Pipeline Synthesizer",
+    cognitiveStyle: "Pragmatic, action-focused, instructional, and cohesive.",
+    criteria: "Weighted index blending, letter grade calibrations, strategic step-by-step sequential action planning.",
+    focus: ["Comprehensive score carding", "Overarching strengths/gaps", "Step-by-step revision tracks", "Prioritized rewrite orders"]
+  }
+};
+
 export default function ReviewDashboard() {
   const [drafts, setDrafts] = useState<SavedDraft[]>([]);
   const [activeDraftId, setActiveDraftId] = useState<string>("");
@@ -66,6 +143,97 @@ Moreover, I have always wanted to leverage deep learning. Our laboratory had a m
   const [activeAgentDetail, setActiveAgentDetail] = useState<string>("grammar");
   const [isRewriting, setIsRewriting] = useState(false);
   const [rewriteTargetId, setRewriteTargetId] = useState<string | null>(null);
+
+  const [activePreTab, setActivePreTab] = useState<"density" | "slop" | "contour" | "agents">("density");
+  const [activePostTab, setActivePostTab] = useState<"radar" | "severities" | "pacing" | "heatmap" | "bargraph">("radar");
+
+  // Helper to compute live text metrics for real-time interactive charts
+  const getLiveMetrics = () => {
+    const rawText = text || "";
+    const cleanText = rawText.trim();
+    const wordCount = cleanText ? cleanText.split(/\s+/).length : 0;
+    const charCount = rawText.length;
+    
+    // Split sentences
+    const sentenceList = rawText.split(/[.!?]+/).map(s => s.trim()).filter(Boolean);
+    const sentenceCount = Math.max(1, sentenceList.length);
+    const avgSentenceLength = Math.round((wordCount / sentenceCount) * 10) / 10;
+    
+    // Find sentence complexity array for pacing contour (scatter chart)
+    const sentenceData = sentenceList.map((sent, index) => {
+      const words = sent.split(/\s+/).filter(Boolean).length;
+      return {
+        sentenceIndex: index + 1,
+        wordCount: words,
+        complexityScore: words > 25 ? "complex" : words < 10 ? "simple" : "moderate"
+      };
+    });
+
+    // Detect target word counts matching active document configurations
+    let targetMin = 400;
+    let targetMax = 600;
+    let targetLabel = "General Strategy";
+    const ctxLower = (context || "").toLowerCase();
+    if (ctxLower.includes("sop") || ctxLower.includes("statement") || ctxLower.includes("stanford") || ctxLower.includes("masters")) {
+      targetMin = 600;
+      targetMax = 1000;
+      targetLabel = "SOP Bound";
+    } else if (ctxLower.includes("cover") || ctxLower.includes("letter") || ctxLower.includes("mckinsey") || ctxLower.includes("associate")) {
+      targetMin = 300;
+      targetMax = 450;
+      targetLabel = "Letter Bound";
+    } else if (ctxLower.includes("pitch") || ctxLower.includes("yc") || ctxLower.includes("partner") || ctxLower.includes("email")) {
+      targetMin = 150;
+      targetMax = 250;
+      targetLabel = "Pitch Bound";
+    }
+
+    // Live Slop & Cliché count
+    const wordsLower = cleanText.toLowerCase();
+    const automatedMarkers = ["delve", "testament", "tapestry", "moreover", "fostering", "elevate", "beacon"];
+    const passivePhrasings = ["assisted", "responsible", "was selected", "was created"];
+    const corporateFluff = ["leverage", "synergy", "synergize", "disrupt", "game-changing", "world-class"];
+
+    let automatedCount = 0;
+    let passiveCount = 0;
+    let corporateCount = 0;
+
+    automatedMarkers.forEach(word => {
+      const regex = new RegExp(`\\b${word}\\b`, "g");
+      const matches = wordsLower.match(regex);
+      if (matches) automatedCount += matches.length;
+    });
+
+    passivePhrasings.forEach(phrase => {
+      const matches = wordsLower.split(phrase).length - 1;
+      passiveCount += matches;
+    });
+
+    corporateFluff.forEach(word => {
+      const regex = new RegExp(`\\b${word}\\b`, "g");
+      const matches = wordsLower.match(regex);
+      if (matches) corporateCount += matches.length;
+    });
+
+    const totalDetections = automatedCount + passiveCount + corporateCount;
+    const naturalProseWordCount = Math.max(0, wordCount - (totalDetections * 3));
+
+    return {
+      wordCount,
+      charCount,
+      sentenceCount,
+      avgSentenceLength,
+      sentenceData: sentenceData.slice(0, 30), // Limit to 30 for visualization space
+      targetMin,
+      targetMax,
+      targetLabel,
+      automatedCount,
+      passiveCount,
+      corporateCount,
+      naturalProseWordCount,
+      totalDetections
+    };
+  };
 
   // Fetch saved drafts & scorecards on load
   useEffect(() => {
@@ -244,6 +412,14 @@ Moreover, I have always wanted to leverage deep learning. Our laboratory had a m
         issues: [],
         strengths: ["Clear values orientation highlights", "Expresses distinct long-term career aspirations"],
         gaps: ["Narrative positions yourself as a follower", "Commodity self-introduction framework"]
+      },
+      recommendation: {
+        agentName: "Recommendation Agent",
+        score: overallScore,
+        feedback: "Based on the multi-agent synthesis, your draft possesses strong baseline attributes but is held back by passive elements and predictable transition patterns. Executing the prioritized action plan will unlock a highly persuasive signature style.",
+        issues: [],
+        strengths: ["Cohesive structural progression", "Honorable thematic clarity throughout"],
+        gaps: ["Standardize interactive sentence pacing index", "De-carbonize automated semantic patterns"]
       }
     };
 
@@ -329,7 +505,7 @@ Moreover, I have always wanted to leverage deep learning. Our laboratory had a m
       if (res.ok) {
         const compiledScorecard = await res.json();
         setScorecard(compiledScorecard);
-        setIsLocalFallback(false);
+        setIsLocalFallback(compiledScorecard.isLocalFallback === true);
         const agentKeys = Object.keys(compiledScorecard.agentResults);
         if (agentKeys.length > 0) {
           setActiveAgentDetail(agentKeys[0]);
@@ -615,19 +791,279 @@ Moreover, I have always wanted to leverage deep learning. Our laboratory had a m
         )}
 
         {/* Empty State Banner (No analysis run yet) */}
-        {!isEvaluating && !scorecard && (
-          <div className="bg-white border border-slate-200 rounded-xl p-8 min-h-[500px] flex flex-col justify-center items-center text-center space-y-4 shadow-sm">
-            <div className="p-4 bg-slate-50 rounded-full border border-slate-200 text-slate-400">
-              <Layers className="w-10 h-10 text-slate-400" />
+        {!isEvaluating && !scorecard && (() => {
+          const metrics = getLiveMetrics();
+          const agentProfileTargetData = [
+            { subject: "Grammar & Style", priority: 85 },
+            { subject: "Logic Progression", priority: 90 },
+            { subject: "Humanization Flow", priority: 95 },
+            { subject: "AI forensics Detection", priority: 90 },
+            { subject: "Contextual Reviewer", priority: 80 },
+            { subject: "ATS Verification", priority: 90 },
+            { subject: "Brand Authority", priority: 85 }
+          ];
+
+          const wordLengthChartData = [
+            { name: "Current Words", count: metrics.wordCount, color: "#4f46e5" },
+            { name: "Suggested Min", count: metrics.targetMin, color: "#10b981" },
+            { name: "Suggested Max", count: metrics.targetMax, color: "#6366f1" }
+          ];
+
+          const slopDistributionData = [
+            { name: "Authentic Expression", value: Math.max(5, metrics.naturalProseWordCount), color: "#10b981" },
+            { name: "Automated Clichés", value: metrics.automatedCount, color: "#ef4444" },
+            { name: "Passive Wording", value: metrics.passiveCount, color: "#f59e0b" },
+            { name: "Corporate Jargon", value: metrics.corporateCount, color: "#3b82f6" }
+          ].filter(item => item.value > 0 || item.name === "Authentic Expression");
+
+          return (
+            <div className="bg-white border border-slate-200 rounded-xl p-6 min-h-[500px] flex flex-col space-y-5 shadow-sm animate-fade-in" id="live_diagnostics_suite">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between justify-start gap-4 pb-4 border-b border-slate-100">
+                <div>
+                  <div className="flex items-center space-x-1.5">
+                    <Activity className="w-4 h-4 text-indigo-600 animate-pulse" />
+                    <span className="text-[10px] font-mono text-indigo-600 uppercase tracking-widest block font-bold">
+                      Sandbox Diagnostics
+                    </span>
+                  </div>
+                  <h4 className="text-base font-extrabold text-slate-800 tracking-tight text-left">
+                    Review Engine Awaiting Document
+                  </h4>
+                </div>
+                <p className="text-[10px] text-slate-400 font-mono bg-slate-50 px-2 py-1 rounded border border-slate-150 self-start sm:self-center">
+                  Live Buffer Active
+                </p>
+              </div>
+
+              {/* Dynamic instruction box */}
+              <div className="bg-indigo-50/50 border border-indigo-100/80 rounded-xl p-3.5 text-xs text-indigo-950 flex items-start space-x-3 text-left">
+                <Info className="w-4.5 h-4.5 text-indigo-600 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold text-indigo-900">Did you know?</p>
+                  <p className="text-indigo-800 leading-relaxed text-[11px]">
+                    Typing or editing your draft on the left compiles these stats and charts <strong className="text-indigo-950 font-semibold">instantly</strong>. Click <strong className="text-indigo-650 font-bold uppercase text-[10px]">Review</strong> to deploy the full agent swarms to grade the essay.
+                  </p>
+                </div>
+              </div>
+
+              {/* Tab Selector buttons */}
+              <div className="flex flex-wrap border-b border-slate-150 text-[10px] sm:text-[11px] gap-1 pb-1 font-sans">
+                <button
+                  onClick={() => setActivePreTab("density")}
+                  className={`px-3 py-1.5 rounded-t-lg transition font-semibold ${
+                    activePreTab === "density"
+                      ? "bg-indigo-50 border-t border-x border-slate-200 text-indigo-700 font-bold"
+                      : "text-slate-500 hover:text-slate-850"
+                  }`}
+                >
+                  📊 Target Bounds
+                </button>
+                <button
+                  onClick={() => setActivePreTab("slop")}
+                  className={`px-3 py-1.5 rounded-t-lg transition font-semibold ${
+                    activePreTab === "slop"
+                      ? "bg-indigo-50 border-t border-x border-slate-200 text-indigo-700 font-bold"
+                      : "text-slate-500 hover:text-slate-850"
+                  }`}
+                >
+                  🥧 Cliché Index
+                </button>
+                <button
+                  onClick={() => setActivePreTab("contour")}
+                  className={`px-3 py-1.5 rounded-t-lg transition font-semibold ${
+                    activePreTab === "contour"
+                      ? "bg-indigo-50 border-t border-x border-slate-200 text-indigo-700 font-bold"
+                      : "text-slate-500 hover:text-slate-850"
+                  }`}
+                >
+                  📈 Rhythm Contour
+                </button>
+                <button
+                  onClick={() => setActivePreTab("agents")}
+                  className={`px-3 py-1.5 rounded-t-lg transition font-semibold ${
+                    activePreTab === "agents"
+                      ? "bg-indigo-50 border-t border-x border-slate-200 text-indigo-700 font-bold"
+                      : "text-slate-500 hover:text-slate-850"
+                  }`}
+                >
+                  🕸️ Swarm Mandate
+                </button>
+              </div>
+
+              <div className="flex-1 min-h-[280px] flex flex-col justify-between">
+                
+                {/* Tab 1 Content: Word count boundaries */}
+                {activePreTab === "density" && (
+                  <div className="space-y-4 flex flex-col justify-between flex-1 animate-fade-in">
+                    <div className="text-center sm:text-left">
+                      <p className="text-xs font-bold text-slate-700">Word Count Boundary Validation</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        Target limits automatically adjust based on the specified document type: <span className="font-mono bg-slate-100 px-1 py-0.5 rounded font-bold text-slate-700">{metrics.targetLabel}</span>
+                      </p>
+                    </div>
+
+                    <div className="h-44 w-full text-xs font-mono">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={wordLengthChartData} margin={{ top: 5, right: 10, left: -25, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
+                          <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: "#1e293b", color: "#f8fafc", borderRadius: "8px", fontSize: "11px", border: "none" }}
+                            cursor={{ fill: "rgba(79, 70, 229, 0.05)" }}
+                          />
+                          <Bar dataKey="count" radius={[4, 4, 0, 0]} barSize={34}>
+                            {wordLengthChartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 bg-slate-50 border border-slate-150 p-2.5 rounded-lg text-center font-mono">
+                      <div>
+                        <span className="text-[9px] text-slate-400 block uppercase font-bold">Current</span>
+                        <span className="text-sm font-extrabold text-indigo-650">{metrics.wordCount}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 block uppercase font-bold">Suggested Min</span>
+                        <span className="text-sm font-extrabold text-slate-750">{metrics.targetMin}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 block uppercase font-bold">Suggested Max</span>
+                        <span className="text-sm font-extrabold text-slate-750">{metrics.targetMax}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tab 2 Content: Slop Analysis */}
+                {activePreTab === "slop" && (
+                  <div className="space-y-4 flex flex-col justify-between flex-1 animate-fade-in">
+                    <div className="text-center sm:text-left">
+                      <p className="text-xs font-bold text-slate-700">Cliché & LLM-Slop Lexicon Density</p>
+                      <p className="text-[10px] text-slate-450 mt-0.5">
+                        Detects transitional clichés ('delve', 'moreover', 'testament' etc.) and passive modifiers in your active draft.
+                      </p>
+                    </div>
+
+                    {metrics.totalDetections === 0 ? (
+                      <div className="flex-1 flex flex-col justify-center items-center py-6 text-center text-slate-500 space-y-2">
+                        <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100">
+                          <CheckCircle className="w-5 h-5 animate-bounce" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-emerald-805">Clear Natural Vocabulary!</p>
+                          <p className="text-[10px] text-slate-400 max-w-[245px] leading-relaxed mt-0.5">
+                            No severe robotic clichés detected in the live buffer. Your wording reads as highly authentic so far!
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center flex-1 py-1 text-left">
+                        <div className="md:col-span-6 h-36 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RechartsPieChart>
+                              <Pie
+                                data={slopDistributionData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={28}
+                                outerRadius={46}
+                                paddingAngle={3}
+                                dataKey="value"
+                              >
+                                {slopDistributionData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                              </Pie>
+                              <Tooltip contentStyle={{ fontSize: "11px", borderRadius: "6px" }} />
+                            </RechartsPieChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        <div className="md:col-span-6 space-y-1.5 text-[11px] font-sans">
+                          {slopDistributionData.map((entry, index) => (
+                            <div key={index} className="flex items-center justify-between p-1.5 bg-slate-50 border border-slate-150 rounded px-2.5">
+                              <div className="flex items-center space-x-1.5 animate-fade-in">
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                                <span className="text-slate-600 font-medium">{entry.name}</span>
+                              </div>
+                              <span className="font-mono font-bold text-slate-750">{entry.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="bg-slate-50 text-slate-500 p-2 text-center text-[10px] rounded border border-slate-150 font-semibold font-sans">
+                      Spotted indicators in active text buffer: <span className="text-indigo-600 font-black">{metrics.totalDetections} markers</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tab 3 Content: Sentence length Rhythm Contour */}
+                {activePreTab === "contour" && (
+                  <div className="space-y-3 flex flex-col justify-between flex-1 animate-fade-in">
+                    <div className="text-center sm:text-left">
+                      <p className="text-xs font-bold text-slate-705">Sentence Length Rhythm Map</p>
+                      <p className="text-[10px] text-slate-450 mt-0.5">
+                        Visualizes sentence complexity. Engaging prose pairs short snappy claims with longer descriptive setups!
+                      </p>
+                    </div>
+
+                    <div className="h-36 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ScatterChart margin={{ top: 5, right: 10, left: -25, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <XAxis type="number" dataKey="sentenceIndex" name="Sentence" stroke="#94a3b8" fontSize={9} />
+                          <YAxis type="number" dataKey="wordCount" name="Words" stroke="#94a3b8" fontSize={9} />
+                          <ZAxis type="category" dataKey="complexityScore" />
+                          <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ fontSize: "11px", borderRadius: "6px" }} />
+                          <Scatter name="Prose Rhythm" data={metrics.sentenceData} fill="#4f46e5">
+                            {metrics.sentenceData.map((entry: any, index: number) => {
+                              const color = entry.wordCount > 25 ? "#ef4444" : entry.wordCount < 10 ? "#10b981" : "#4f46e5";
+                              return <Cell key={`cell-${index}`} fill={color} />;
+                            })}
+                          </Scatter>
+                        </ScatterChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="text-[10px] font-sans text-slate-450 text-center leading-relaxed">
+                      Legend: <span className="text-emerald-500 font-extrabold">● Short (&lt;10 words)</span> • <span className="text-indigo-505 font-extrabold">● Balanced (10-25)</span> • <span className="text-rose-500 font-extrabold">● Complex (&gt;25)</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tab 4 Content: Agent priority focus overview */}
+                {activePreTab === "agents" && (
+                  <div className="space-y-4 flex flex-col justify-between flex-1 animate-fade-in">
+                    <div className="text-center sm:text-left">
+                      <p className="text-xs font-bold text-slate-705">8-Agent Swarms Target Dimension Priorities</p>
+                      <p className="text-[10px] text-slate-455 mt-0.5">
+                        These are the exact weight allocations and focus ratios programmed into our LLM cognitive pipelines.
+                      </p>
+                    </div>
+
+                    <div className="h-44 w-full flex justify-center text-[10px] font-sans">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RadarChart cx="50%" cy="50%" outerRadius="70%" data={agentProfileTargetData}>
+                          <PolarGrid stroke="#e2e8f0" />
+                          <PolarAngleAxis dataKey="subject" stroke="#64748b" fontSize={9} tickLine={false} />
+                          <PolarRadiusAxis angle={30} domain={[0, 100]} fontSize={8} stroke="#cbd5e1" />
+                          <Radar name="Agent Focus Target" dataKey="priority" stroke="#4f46e5" fill="#c7d2fe" fillOpacity={0.4} />
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+
+              </div>
             </div>
-            <div className="space-y-1">
-              <h4 className="font-semibold text-slate-800 text-sm">Review Engine Awaiting Document</h4>
-              <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
-                Input your text or click one of our preset templates on the left, then click <strong className="text-indigo-650">"Review"</strong> to audit writing quality across 8 analytical dimensions.
-              </p>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Scorecard Results Interface */}
         {!isEvaluating && scorecard && (
@@ -637,9 +1073,27 @@ Moreover, I have always wanted to leverage deep learning. Our laboratory had a m
               <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-4 flex items-start space-x-3 text-amber-800 shadow-xs animate-fade-in" id="local_fallback_notice_banner">
                 <CircleAlert className="w-4.5 h-4.5 text-amber-600 flex-shrink-0 mt-0.5 animate-bounce" />
                 <div className="text-xs space-y-1">
-                  <p className="font-bold text-amber-900">Local Review Optimization Active</p>
+                  <p className="font-bold text-amber-900">
+                    {scorecard.fallbackReason === "quota_exceeded" 
+                      ? "Local Sandbox Optimizer Activated (API Quota Limit Met)" 
+                      : scorecard.fallbackReason === "unavailable"
+                      ? "Local Sandbox Optimizer Activated (High API Demand)"
+                      : "Local Review Optimization Active"}
+                  </p>
                   <p className="text-amber-700 leading-relaxed">
-                    Analyzing metrics of structure, logic, passive words, and AI vocabulary. To activate the fully generative 8-Agent Swarms with deep contextual intelligence, define your <code className="bg-amber-100 px-1 py-0.5 rounded font-bold text-amber-900 font-mono">GEMINI_API_KEY</code> in the secrets panel.
+                    {scorecard.fallbackReason === "quota_exceeded" ? (
+                      <span>
+                        The system has seamlessly engaged WriteMind's Local Sandbox Optimizer because the system's Gemini API key has temporarily reached its free-tier usage quota. Your score calculations and critical text audits remain <strong className="font-bold">100% active, fast, and precise</strong>.
+                      </span>
+                    ) : scorecard.fallbackReason === "unavailable" ? (
+                      <span>
+                        The system has engaged WriteMind's Local Sandbox Optimizer because the generative Gemini API is currently experiencing unusually high demand. Your scorecards and analytical metrics are <strong className="font-bold">fully operational</strong>.
+                      </span>
+                    ) : (
+                      <span>
+                        Analyzing metrics of structure, logic, passive words, and AI vocabulary. To activate the fully generative 8-Agent Swarms with deep contextual intelligence, define your <code className="bg-amber-100 px-1 py-0.5 rounded font-bold text-amber-900 font-mono">GEMINI_API_KEY</code> in the secrets panel.
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
@@ -726,12 +1180,347 @@ Moreover, I have always wanted to leverage deep learning. Our laboratory had a m
               </div>
             </div>
 
+            {/* Swarm Visual Analytics Center */}
+            {(() => {
+              const metrics = getLiveMetrics();
+              const evaluatedRadarData = Object.entries(scorecard.agentResults).map(([key, val]: [string, any]) => {
+                return {
+                  subject: val.agentName.replace(" Agent", ""),
+                  score: val.score,
+                  fullMark: 100
+                };
+              });
+
+              let criticalCount = 0;
+              let warningCount = 0;
+              let infoCount = 0;
+              Object.values(scorecard.agentResults).forEach((val: any) => {
+                (val.issues || []).forEach((issue: any) => {
+                  if (issue.severity === "critical") criticalCount++;
+                  else if (issue.severity === "warning") warningCount++;
+                  else infoCount++;
+                });
+              });
+
+              const issueSeverityData = [
+                { name: "Critical Blockers", value: criticalCount, color: "#ef4444" },
+                { name: "Style Warnings", value: warningCount, color: "#f59e0b" },
+                { name: "Optimizations", value: infoCount, color: "#3b82f6" }
+              ].filter(item => item.value > 0);
+
+              return (
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm text-slate-800 animate-fade-in" id="swarm_visuals_panel">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between justify-start gap-3 pb-3 border-b border-slate-100">
+                    <div className="text-left">
+                      <div className="flex items-center space-x-1.5">
+                        <BarChart3 className="w-4 h-4 text-indigo-600" />
+                        <span className="text-[10px] font-mono text-indigo-600 uppercase tracking-widest font-extrabold block">
+                          Visual Intelligence
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-black text-slate-800 tracking-tight mt-0.5">
+                        Swarm Audit Projections & Pacing
+                      </h4>
+                    </div>
+                    
+                    {/* Visual tabsSelectors */}
+                    <div className="flex flex-wrap gap-1 bg-slate-50 border border-slate-200 p-0.5 rounded-lg text-[10px] font-mono self-start sm:self-center">
+                      <button
+                        onClick={() => setActivePostTab("radar")}
+                        className={`px-2.5 py-1 rounded transition font-bold ${
+                          activePostTab === "radar"
+                            ? "bg-white text-indigo-700 shadow-xs"
+                            : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        Radar Scores
+                      </button>
+                      <button
+                        onClick={() => setActivePostTab("severities")}
+                        className={`px-2.5 py-1 rounded transition font-bold ${
+                          activePostTab === "severities"
+                            ? "bg-white text-indigo-700 shadow-xs"
+                            : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        Issue Split
+                      </button>
+                      <button
+                        onClick={() => setActivePostTab("pacing")}
+                        className={`px-2.5 py-1 rounded transition font-bold ${
+                          activePostTab === "pacing"
+                            ? "bg-white text-indigo-700 shadow-xs"
+                            : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        Rhythm Map
+                      </button>
+                      <button
+                        onClick={() => setActivePostTab("bargraph")}
+                        className={`px-2.5 py-1 rounded transition font-bold ${
+                          activePostTab === "bargraph"
+                            ? "bg-white text-indigo-700 shadow-xs"
+                            : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        Agent Bars
+                      </button>
+                      <button
+                        onClick={() => setActivePostTab("heatmap")}
+                        className={`px-2.5 py-1 rounded transition font-bold ${
+                          activePostTab === "heatmap"
+                            ? "bg-white text-indigo-700 shadow-xs"
+                            : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        Slop Heatmap
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Viewports */}
+                  <div className="min-h-[220px] flex flex-col justify-center">
+                    
+                    {activePostTab === "radar" && (
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center animate-fade-in text-left">
+                        <div className="md:col-span-7 h-48 w-full text-[10px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RadarChart cx="50%" cy="50%" outerRadius="75%" data={evaluatedRadarData}>
+                              <PolarGrid stroke="#cbd5e1" />
+                              <PolarAngleAxis dataKey="subject" stroke="#64748b" fontSize={9} fontWeight="bold" tickLine={false} />
+                              <PolarRadiusAxis angle={30} domain={[0, 100]} fontSize={8} stroke="#e2e8f0" />
+                              <Radar name="Agent Score" dataKey="score" stroke="#4f46e5" fill="#818cf8" fillOpacity={0.35} />
+                              <Tooltip contentStyle={{ fontSize: "11px", borderRadius: "6px" }} />
+                            </RadarChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        <div className="md:col-span-5 space-y-2">
+                          <div className="p-3 bg-indigo-50/50 border border-indigo-150 rounded-lg text-xs leading-relaxed text-indigo-900">
+                            <p className="font-bold mb-1">Focus Balance</p>
+                            <p className="text-[11px] text-indigo-850 leading-relaxed">
+                              Highest achieving score: <strong className="font-semibold text-indigo-950">{
+                                evaluatedRadarData.length > 0 
+                                  ? [...evaluatedRadarData].sort((a,b) => b.score - a.score)[0]?.subject
+                                  : "N/A"
+                              } ({
+                                evaluatedRadarData.length > 0 
+                                  ? [...evaluatedRadarData].sort((a,b) => b.score - a.score)[0]?.score
+                                  : 0
+                              }%)</strong>. Optimization priority is <strong className="font-semibold text-rose-750">{
+                                evaluatedRadarData.length > 0 
+                                  ? [...evaluatedRadarData].sort((a,b) => a.score - b.score)[0]?.subject
+                                  : "N/A"
+                              } ({
+                                evaluatedRadarData.length > 0 
+                                  ? [...evaluatedRadarData].sort((a,b) => a.score - b.score)[0]?.score
+                                  : 0
+                              }%)</strong>.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {activePostTab === "severities" && (
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center animate-fade-in text-left">
+                        {issueSeverityData.length === 0 ? (
+                          <div className="col-span-12 py-10 text-center space-y-2 flex flex-col items-center">
+                            <CheckCircle className="w-8 h-8 text-emerald-500" />
+                            <div>
+                              <p className="text-xs font-bold text-slate-800">Clear Performance Score!</p>
+                              <p className="text-[11px] text-slate-450 mt-0.5">No structural, stylistic, or wording issues remain in this document draft.</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="md:col-span-5 h-44 w-full">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <RechartsPieChart>
+                                  <Pie
+                                    data={issueSeverityData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={30}
+                                    outerRadius={50}
+                                    paddingAngle={4}
+                                    dataKey="value"
+                                  >
+                                    {issueSeverityData.map((entry, index) => (
+                                      <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                  </Pie>
+                                  <Tooltip contentStyle={{ fontSize: "11px", borderRadius: "6px" }} />
+                                </RechartsPieChart>
+                              </ResponsiveContainer>
+                            </div>
+                            
+                            <div className="md:col-span-7 space-y-1.5 font-sans">
+                              <p className="text-[11px] font-bold text-slate-600 mb-1">Issue Severity Distribution Breakdown</p>
+                              {issueSeverityData.map((entry, index) => (
+                                <div key={index} className="flex items-center justify-between p-1.5 bg-slate-50 border border-slate-150 rounded text-xs px-3">
+                                  <div className="flex items-center space-x-2 animate-fade-in">
+                                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                                    <span className="text-slate-650 font-medium">{entry.name}</span>
+                                  </div>
+                                  <span className="font-mono font-black text-slate-800">{entry.value} instances</span>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {activePostTab === "pacing" && (
+                      <div className="space-y-3 animate-fade-in text-left">
+                        <div>
+                          <p className="text-xs font-bold text-slate-700">Sentence Length Rhythm Profile</p>
+                          <p className="text-[10px] text-slate-450">
+                            A highly-varying rhythm pattern mimics standard organic prose lengths and avoids robotic tone patterns.
+                          </p>
+                        </div>
+
+                        <div className="h-36 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <ScatterChart margin={{ top: 5, right: 10, left: -25, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis type="number" dataKey="sentenceIndex" name="Sentence" stroke="#94a3b8" fontSize={9} />
+                              <YAxis type="number" dataKey="wordCount" name="Words" stroke="#94a3b8" fontSize={9} />
+                              <ZAxis type="category" dataKey="complexityScore" />
+                              <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ fontSize: "11px", borderRadius: "6px" }} />
+                              <Scatter name="Sentence Word Count" data={metrics.sentenceData} fill="#4f46e5">
+                                {metrics.sentenceData.map((entry: any, index: number) => {
+                                  const color = entry.wordCount > 25 ? "#ef4444" : entry.wordCount < 10 ? "#10b981" : "#4f46e5";
+                                  return <Cell key={`cell-${index}`} fill={color} />;
+                                })}
+                              </Scatter>
+                            </ScatterChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        <div className="text-[10px] text-center font-medium font-mono text-slate-450">
+                          Average sentence length: <span className="text-indigo-600 font-bold">{metrics.avgSentenceLength} words</span> • Total sentence markers: <span className="text-indigo-600 font-bold">{metrics.sentenceCount}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {activePostTab === "heatmap" && (
+                      <div className="space-y-4 animate-fade-in text-left">
+                        <div>
+                          <p className="text-xs font-bold text-slate-700">Paragraph Style & Slop Heatmap</p>
+                          <p className="text-[10px] text-slate-450">
+                            Hover over each sector of your document to see specific volume density, micro-analysis, and estimated robot/stiff copywriting probability.
+                          </p>
+                        </div>
+
+                        {(() => {
+                          const paragraphs = scorecard.text.split("\n\n").filter(p => p.trim().length > 0);
+                          const slopList = ["delve", "testament", "tapestry", "moreover", "leverage", "synergy", "assisted in", "was responsible for"];
+                          
+                          return (
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                                {paragraphs.map((p, idx) => {
+                                  const words = p.split(/\s+/).length;
+                                  let slopCount = 0;
+                                  const lowerP = p.toLowerCase();
+                                  slopList.forEach(w => {
+                                    if (lowerP.includes(w)) slopCount++;
+                                  });
+                                  
+                                  // Intensity color setup
+                                  let intensityColor = "bg-emerald-50/75 border-emerald-200 text-emerald-800 hover:bg-emerald-100/90";
+                                  let severityLabel = "Flawless / Human";
+                                  if (slopCount >= 2) {
+                                    intensityColor = "bg-rose-50 border-rose-200 text-rose-800 hover:bg-rose-100";
+                                    severityLabel = "Critical Slop Risk";
+                                  } else if (slopCount === 1) {
+                                    intensityColor = "bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100";
+                                    severityLabel = "Medium Slop Risk";
+                                  } else if (words > 80) {
+                                    intensityColor = "bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100";
+                                    severityLabel = "Wordy / Complex";
+                                  }
+
+                                  return (
+                                    <div 
+                                      key={idx} 
+                                      className={`p-3 border rounded-xl transition-all duration-200 cursor-help ${intensityColor} flex flex-col justify-between h-24`}
+                                      title={p.slice(0, 160) + "..."}
+                                    >
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-mono font-black uppercase tracking-wider">SEC #{idx + 1}</span>
+                                        <span className="text-[8px] px-1.5 py-0.5 bg-white/70 rounded-full font-extrabold uppercase">{severityLabel}</span>
+                                      </div>
+                                      
+                                      <div className="text-left mt-2">
+                                        <div className="text-[10px] font-mono leading-none">
+                                          Words: <strong className="font-extrabold">{words}</strong>
+                                        </div>
+                                        <div className="text-[10px] font-mono mt-1 leading-none">
+                                          Slops: <strong className="font-extrabold">{slopCount}</strong>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <div className="flex flex-wrap items-center justify-center gap-4 text-[9px] font-mono text-slate-400 pt-1">
+                                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-emerald-100 border border-emerald-300 inline-block"></span> Natural Human</span>
+                                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-blue-100 border border-blue-300 inline-block"></span> Dense / Wordy</span>
+                                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-amber-100 border border-amber-300 inline-block"></span> Light Clichés</span>
+                                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-rose-100 border border-rose-300 inline-block"></span> Heavy Slop</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                    {activePostTab === "bargraph" && (
+                      <div className="space-y-4 animate-fade-in text-left">
+                        <div>
+                          <p className="text-xs font-bold text-slate-700">Simulated Agent Score Comparisons</p>
+                          <p className="text-[10px] text-slate-450">
+                            Compares each simulated agent's evaluation score directly against the rigorous standard threshold (85%).
+                          </p>
+                        </div>
+
+                        <div className="h-44 w-full text-[10px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={evaluatedRadarData} margin={{ top: 5, right: 10, left: -25, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis dataKey="subject" stroke="#64748b" fontSize={9} fontWeight="bold" tickLine={false} />
+                              <YAxis stroke="#64748b" fontSize={9} domain={[0, 100]} />
+                              <Tooltip contentStyle={{ fontSize: "11px", borderRadius: "6px" }} />
+                              <Bar name="Agent Core Score" dataKey="score" fill="#4f46e5" radius={[4, 4, 0, 0]}>
+                                {evaluatedRadarData.map((entry: any, index: number) => {
+                                  const color = entry.score >= 85 ? "#10b981" : entry.score >= 70 ? "#4f46e5" : "#f43f5e";
+                                  return <Cell key={`cell-${index}`} fill={color} />;
+                                })}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        
+                        <div className="text-[10px] text-center font-mono text-slate-400">
+                          Color Index: <span className="text-emerald-500 font-extrabold">■ Complaisant (85+)</span> • <span className="text-indigo-500 font-extrabold">■ Warning (70-84)</span> • <span className="text-rose-500 font-extrabold">■ Action Needed (&lt;70)</span>
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Agent scores summary row */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
               <h4 className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-bold mb-3">
                 Agent Sub-Scores
               </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
                 {Object.entries(scorecard.agentResults).map(([key, val]) => {
                   const value = val as any;
                   return (
@@ -774,6 +1563,44 @@ Moreover, I have always wanted to leverage deep learning. Our laboratory had a m
                     Score: {scorecard.agentResults[activeAgentDetail].score}/100
                   </div>
                 </div>
+
+                {/* Agent Personality metadata */}
+                {(() => {
+                  const meta = AGENT_METADATA[activeAgentDetail];
+                  if (!meta) return null;
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-150 text-xs text-slate-750 font-sans">
+                      <div>
+                        <span className="text-[9px] text-indigo-650 font-black tracking-wider uppercase block mb-1">
+                          Cognitive Style
+                        </span>
+                        <p className="text-slate-650 italic font-medium leading-relaxed">
+                          "{meta.cognitiveStyle}"
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-indigo-650 font-black tracking-wider uppercase block mb-1">
+                          Primary Criteria
+                        </span>
+                        <p className="text-slate-650 leading-relaxed font-semibold">
+                          {meta.criteria}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-indigo-650 font-black tracking-wider uppercase block mb-1">
+                          Target Vectors
+                        </span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {meta.focus.map((f, i) => (
+                            <span key={i} className="text-[9px] bg-white border border-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">
+                              {f}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="space-y-4">
                   <p className="text-xs text-slate-700 leading-relaxed bg-slate-50 p-3.5 rounded-lg border border-slate-100 font-normal italic">

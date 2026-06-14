@@ -42,6 +42,8 @@ export interface EvaluationScorecard {
   keyStrengths: string[];
   keyGaps: string[];
   actionPlan: string[];
+  isLocalFallback?: boolean;
+  fallbackReason?: string;
 }
 
 export interface SavedDraft {
