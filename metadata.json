@@ -1,0 +1,6 @@
+{
+  "name": "WriteMind AI",
+  "description": "An AI-powered Writing Intelligence Platform that evaluates grammar, clarity, human-likeness, logical flow, brand alignment, reviewer impressions, and ATS readability.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
