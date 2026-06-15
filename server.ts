@@ -750,7 +750,7 @@ You MUST output strictly formatted JSON matching the provided schema. Ensure you
   });
 
   // Serve static assets in production
-  if (process.env.NODE_ENV === "production" || process.env.DISABLE_HMR === "true") {
+  if (process.env.NODE_ENV === "production") {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
